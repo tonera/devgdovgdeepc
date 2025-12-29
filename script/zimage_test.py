@@ -134,7 +134,7 @@ else:
 image = pipe(
     prompt=args.prompt,
     guidance_scale=0,
-    num_inference_steps=8,
+    num_inference_steps=4,
     width=1024,
     height=1024,
     generator=torch.Generator(device).manual_seed(0)
