@@ -72,11 +72,11 @@ mkdir -p /data/dongd/dc_converted_model
 校准数据用于量化过程中的范围估计和平滑参数优化。
 
 ### 命令
-
+export TORCH_CUDA_ARCH_LIST="12.1"
 ```bash
-TORCH_CUDA_ARCH_LIST="12.1" python3 -m deepcompressor.app.diffusion.dataset.collect.calib \
-    examples/diffusion/configs/model/z-image-turbo_smoke.yaml \
-    examples/diffusion/configs/collect/qdiff.yaml
+python3 -m deepcompressor.app.diffusion.dataset.collect.calib \
+    examples/diffusion/configs/collect/qdiff.yaml \
+    examples/diffusion/configs/model/z-image-turbo_smoke.yaml 
 ```
 
 ### 配置说明
@@ -112,19 +112,20 @@ nohup python3 -m deepcompressor.app.diffusion.dataset.collect.calib \
 
 ## 步骤 2: 执行模型量化
 
-使用 SVDQuant 算法对模型进行 INT4 量化。
+使用 SVDQuant 算法对模型进行 nvfp4 量化。
 
 ### 方式 A: 基础量化
 
 对所有层进行量化：
 
 ```bash
-TORCH_CUDA_ARCH_LIST="9.0" python3 -m deepcompressor.app.diffusion.ptq \
-    examples/diffusion/configs/model/z-image-turbo.yaml \
-    examples/diffusion/configs/svdquant/int4.yaml \
-    --save-model /data/dongd/dc_saved_model/Z_IMAGE_TURBO_$(date +%Y%m%d_%H%M) \
+python3 -m deepcompressor.app.diffusion.ptq \
+    examples/diffusion/configs/model/z-image-turbo_smoke.yaml \
+    examples/diffusion/configs/svdquant/nvfp4.yaml \
+    --save-model /home/tonera/project/devgdovgdeepc/dc_saved_model/Z_IMAGE_TURBO_$(date +%Y%m%d_%H%M) \
     --copy-on-save true \
-    --skip-eval true
+    --skip-eval true \
+    --eval-benchmarks .tmp/qdiff.yaml 
 ```
 
 ### 方式 B: 带 Low-Rank 分解的量化 (推荐)
@@ -132,12 +133,13 @@ TORCH_CUDA_ARCH_LIST="9.0" python3 -m deepcompressor.app.diffusion.ptq \
 使用 rank=128 的低秩分解，跳过 refiners 层：
 
 ```bash
-TORCH_CUDA_ARCH_LIST="9.0" python3 -m deepcompressor.app.diffusion.ptq \
+python3 -m deepcompressor.app.diffusion.ptq \
     examples/diffusion/configs/model/z-image-turbo-rank128-skip-refiners.yaml \
-    examples/diffusion/configs/svdquant/int4.yaml \
-    --save-model /data/dongd/dc_saved_model/Z_IMAGE_TURBO_$(date +%Y%m%d_%H%M) \
+    examples/diffusion/configs/svdquant/nvfp4.yaml \
+    --save-model /home/tonera/project/devgdovgdeepc/dc_saved_model/Z_IMAGE_TURBO_$(date +%Y%m%d_%H%M) \
     --copy-on-save true \
-    --skip-eval true
+    --skip-eval true \
+    --eval-benchmarks .tmp/qdiff.yaml 
 ```
 
 ### 参数说明
@@ -224,7 +226,7 @@ TORCH_CUDA_ARCH_LIST="9.0" python3 -m deepcompressor.app.diffusion.ptq \
 ### 命令
 
 ```bash
-TORCH_CUDA_ARCH_LIST="9.0" python -m deepcompressor.backend.nunchaku.convert \
+python -m deepcompressor.backend.nunchaku.convert \
     --quant-path /data/dongd/dc_saved_model/Z_IMAGE_TURBO_20251204_0743 \
     --output-root /data/dongd/dc_converted_model/Z_IMAGE_TURBO_20251204_0743_r128 \
     --model-name z-image-turbo
@@ -259,7 +261,7 @@ nohup python -m deepcompressor.backend.nunchaku.convert \
 set -e
 
 # ==================== 配置区域 ====================
-export TORCH_CUDA_ARCH_LIST="9.0"  # 根据 GPU 修改
+export TORCH_CUDA_ARCH_LIST="12.1"  # 根据 GPU 修改
 
 TIMESTAMP=$(date +%Y%m%d_%H%M)
 MODEL_CONFIG="examples/diffusion/configs/model/z-image-turbo-rank128-skip-refiners.yaml"

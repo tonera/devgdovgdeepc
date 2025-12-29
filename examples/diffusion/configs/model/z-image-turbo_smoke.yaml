@@ -1,9 +1,9 @@
 pipeline:
   name: z-image-turbo
   dtype: torch.bfloat16
-  path: /home/tonera/models/Z-Image-Turbo
+  path: /home/tonera/SVDQuant/Beyond_Reality_v1/diffusers
 collect:
-  root: /home/tonera/project/devgdovgdeepc
+  root: /home/tonera/project/devgdovgdeepc/datasets
   num_samples: 8
 eval:
   num_steps: 4
