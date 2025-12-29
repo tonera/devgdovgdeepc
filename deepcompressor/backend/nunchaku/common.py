@@ -20,6 +20,14 @@ def convert_to_nunchaku_w4x4y16_linear_state_dict(
     if weight.ndim > 2:  # pointwise conv
         assert weight.numel() == weight.shape[0] * weight.shape[1]
         weight = weight.view(weight.shape[0], weight.shape[1])
+    oc = int(weight.shape[0])
+    # Nunchaku FP4 loader expects coarse scale key to be `wcscales` (not `wtscale`).
+    # DeepCompressor may produce per-tensor `scale.0` (numel==1) for some linears; for FP4 we
+    # expand it to per-output-channel so that:
+    # - key becomes `wcscales`
+    # - converter keeps a packed per-channel layout (instead of collapsing to a scalar)
+    if float_point and scale is not None and scale.numel() == 1:
+        scale = scale.view(-1).expand(oc).reshape(oc, 1, 1, 1)
     if scale.numel() > 1:
         assert scale.ndim == weight.ndim * 2
         assert scale.numel() == scale.shape[0] * scale.shape[2]
