@@ -1,4 +1,5 @@
-root: datasets
-dataset_name: qdiff
-data_path: examples/diffusion/prompts/qdiff.yaml
-num_samples: 128
+collect:
+  root: datasets
+  dataset_name: qdiff
+  data_path: examples/diffusion/prompts/qdiff.yaml
+  num_samples: 128

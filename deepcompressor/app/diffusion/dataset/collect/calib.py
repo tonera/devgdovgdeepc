@@ -112,7 +112,9 @@ class CollectConfig:
 
 if __name__ == "__main__":
     parser = DiffusionPtqRunConfig.get_parser()
-    parser.add_config(CollectConfig, scope="collect", prefix="collect")
+    # NOTE: 配置文件已使用 `collect:` 作为作用域；这里再加 `prefix="collect"` 会导致
+    # `collect.root/data_path/...` 等字段无法匹配，从而被报告为 unused 并回退到默认值。
+    parser.add_config(CollectConfig, scope="collect")
     configs, _, unused_cfgs, unused_args, unknown_args = parser.parse_known_args()
     ptq_config, collect_config = configs[""], configs["collect"]
     assert isinstance(ptq_config, DiffusionPtqRunConfig)

@@ -76,8 +76,7 @@ mkdir -p /data/dongd/dc_converted_model
 ```bash
 TORCH_CUDA_ARCH_LIST="12.1" python3 -m deepcompressor.app.diffusion.dataset.collect.calib \
     examples/diffusion/configs/model/z-image-turbo_smoke.yaml \
-    examples/diffusion/configs/collect/qdiff.yaml \
-    --collect.data_path examples/diffusion/prompts/qdiff.yaml
+    examples/diffusion/configs/collect/qdiff.yaml
 ```
 
 ### 配置说明
