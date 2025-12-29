@@ -2,34 +2,37 @@ pipeline:
   name: z-image-turbo
   dtype: torch.bfloat16
   path: /home/tonera/SVDQuant/Beyond_Reality_v1/diffusers
+develop_dtype: torch.bfloat16
 collect:
   root: /home/tonera/project/devgdovgdeepc/datasets
-  num_samples: 4
+  num_samples: 8
 eval:
   num_steps: 4
   guidance_scale: 0
   protocol: fmeuler{num_steps}-g{guidance_scale}
   benchmarks:
     - "deepcompressor/dataset/MJHQ30KMETA.json"
-  num_samples: 4
+  num_samples: 8
 quant:
-  enable_smooth: true
+  enable_smooth: false
   calib:
     batch_size: 1
     path: datasets/{dtype}/{model}/{protocol}/{data}/s8
-    num_samples: 4
+    num_samples: 8
     num_workers: 1
   wgts:
-    enable_low_rank: true
+    enable_low_rank: false
     calib_range:
       element_batch_size: 4
       sample_batch_size: 4
       element_size: 4
       sample_size: 4
+      outputs_device: cuda
     low_rank:
       sample_batch_size: 4
       sample_size: 4
       num_iters: 10
+      outputs_device: cuda
       skips:
       - transformer_norm
       - transformer_add_norm
@@ -54,12 +57,12 @@ quant:
       sample_size: 4
   smooth:
     proj:
+      allow_low_rank: false
       element_batch_size: 4
       sample_batch_size: 4
       element_size: 4
       sample_size: 4
       num_grids: 2
-      outputs_device: cuda
       skips:
       - transformer_norm
       - transformer_add_norm
@@ -69,4 +72,3 @@ quant:
       sample_batch_size: 4
       sample_size: 4
       num_grids: 2
-      outputs_device: cuda
