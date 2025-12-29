@@ -59,6 +59,7 @@ quant:
       element_size: 4
       sample_size: 4
       num_grids: 2
+      outputs_device: cuda
       skips:
       - transformer_norm
       - transformer_add_norm
@@ -67,3 +68,5 @@ quant:
     attn:
       sample_batch_size: 4
       sample_size: 4
+      num_grids: 2
+      outputs_device: cuda
