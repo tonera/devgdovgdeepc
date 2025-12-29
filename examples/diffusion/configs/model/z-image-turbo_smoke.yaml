@@ -4,6 +4,7 @@ pipeline:
   path: /home/tonera/models/Z-Image-Turbo
 collect:
   root: /home/tonera/project/devgdovgdeepc
+  num_samples: 8
 eval:
   num_steps: 4
   guidance_scale: 0
