@@ -233,7 +233,9 @@ python -m deepcompressor.backend.nunchaku.convert \
     --model-name z-image-turbo \
     --device cuda:0 \
     --float-point \
-    --output-file ./dc_converted_model/z-image-turbo/svd-fp4-Beyond_Reality_v1.safetensors
+    --output-file ./dc_converted_model/z-image-turbo/svd-fp4-Beyond_Reality_v1.safetensors \
+    --diffusers-dir /home/tonera/SVDQuant/Beyond_Reality_v1/diffusers \
+    --rank 32
 
 ```
 

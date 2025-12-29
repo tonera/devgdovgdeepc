@@ -178,6 +178,9 @@ if __name__ == "__main__":
             merged.update(other_state_dict)
             output_file = os.path.abspath(os.path.expanduser(args.output_file))
             os.makedirs(os.path.dirname(output_file), exist_ok=True)
+            if os.path.exists(output_file):
+                os.remove(output_file)
+                print(f"Removed existing output file: {output_file}")
             metadata: dict[str, str] | None = None
             if "z-image" in model_name.lower():
                 diffusers_dir = _abs(args.diffusers_dir) if str(args.diffusers_dir).strip() else ""
