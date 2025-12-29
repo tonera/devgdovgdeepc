@@ -230,7 +230,11 @@ TORCH_CUDA_ARCH_LIST="9.0" python3 -m deepcompressor.app.diffusion.ptq \
 python -m deepcompressor.backend.nunchaku.convert \
     --quant-path ./dc_saved_model/Z_IMAGE_TURBO_20251229_1228 \
     --output-root ./dc_converted_model \
-    --model-name z-image-turbo
+    --model-name z-image-turbo \
+    --device cuda:0 \
+    --float-point \
+    --output-file ./dc_converted_model/z-image-turbo/svd-fp4-Beyond_Reality_v1.safetensors
+
 ```
 
 ### 参数说明

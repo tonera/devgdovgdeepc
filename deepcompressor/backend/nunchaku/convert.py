@@ -22,15 +22,24 @@ if __name__ == "__main__":
         default="cpu",
         help='torch.load map_location target. Examples: "cpu", "cuda", "cuda:0". Default: "cpu".',
     )
-    parser.add_argument("--float-point", action="store_true", help="use float-point 4-bit quantization.")
-    parser.add_argument("--dry-run", type=bool, default=False, help="if True, state dicts will be NOT be saved")
+    parser.add_argument(
+        "--output-file",
+        type=str,
+        default="",
+        help=(
+            "Optional. If set, merge all weights into a single safetensors file at this path. "
+            "Otherwise, save two files: transformer_blocks.safetensors + unquantized_layers.safetensors."
+        ),
+    )
+    parser.add_argument("--float-point", action="store_true", help="use float-point 4-bit quantization (FP4).")
+    parser.add_argument("--dry-run", action="store_true", help="if set, state dicts will NOT be saved")
     args = parser.parse_args()
     if not args.output_root:
         args.output_root = args.quant_path
     if args.model_name is None:
-        assert args.model_path is not None, "model name or path is required."
-        model_name = args.model_path.rstrip(os.sep).split(os.sep)[-1]
-        print(f"Model name not provided, using {model_name} as the model name.")
+        # Fall back to the quant dir name (recommended: always pass --model-name).
+        model_name = args.quant_path.rstrip(os.sep).split(os.sep)[-1]
+        print(f"Model name not provided, using {model_name} as the model name (please pass --model-name to be safe).")
     else:
         model_name = args.model_name
     assert model_name, "Model name must be provided."
@@ -75,6 +84,17 @@ if __name__ == "__main__":
     else:
         output_dirpath = os.path.join(args.output_root, model_name)
         os.makedirs(output_dirpath, exist_ok=True)
-        safetensors.torch.save_file(converted_state_dict, os.path.join(output_dirpath, "transformer_blocks.safetensors"))
-        safetensors.torch.save_file(other_state_dict, os.path.join(output_dirpath, "unquantized_layers.safetensors"))
-        print(f"Quantized model saved to {output_dirpath}.")
+        if args.output_file:
+            merged = {}
+            merged.update(converted_state_dict)
+            merged.update(other_state_dict)
+            output_file = os.path.abspath(os.path.expanduser(args.output_file))
+            os.makedirs(os.path.dirname(output_file), exist_ok=True)
+            safetensors.torch.save_file(merged, output_file)
+            print(f"Quantized model saved to {output_file}.")
+        else:
+            safetensors.torch.save_file(
+                converted_state_dict, os.path.join(output_dirpath, "transformer_blocks.safetensors")
+            )
+            safetensors.torch.save_file(other_state_dict, os.path.join(output_dirpath, "unquantized_layers.safetensors"))
+            print(f"Quantized model saved to {output_dirpath}.")
