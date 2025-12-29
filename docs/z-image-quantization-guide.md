@@ -238,6 +238,21 @@ python -m deepcompressor.backend.nunchaku.convert \
     --rank 32
 
 ```
+检查key
+```bash
+python script/diff_nunchaku_expected_keys.py \
+  --model ./dc_converted_model/z-image-turbo/svd-fp4-Beyond_Reality_v1-r32.safetensors \
+  --device cpu \
+  --torch-dtype bf16 \
+  --limit 20
+```
+测试出图
+```bash
+python script/zimage_test.py \
+  --model ./dc_converted_model/z-image-turbo/svd-fp4-Beyond_Reality_v1-r32.safetensors \
+  --base /home/tonera/SVDQuant/Beyond_Reality_v1/diffusers \
+  --prompt "a cute dog"
+```
 
 ### 参数说明
 
