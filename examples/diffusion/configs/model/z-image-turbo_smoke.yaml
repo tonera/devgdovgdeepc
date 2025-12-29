@@ -21,7 +21,7 @@ quant:
     num_samples: 8
     num_workers: 1
   wgts:
-    enable_low_rank: false
+    enable_low_rank: true
     calib_range:
       element_batch_size: 4
       sample_batch_size: 4
