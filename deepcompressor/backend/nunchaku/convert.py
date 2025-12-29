@@ -16,6 +16,12 @@ if __name__ == "__main__":
     parser.add_argument("--quant-path", type=str, required=True, help="path to the quantization checkpoint directory.")
     parser.add_argument("--output-root", type=str, default="", help="root to the output checkpoint directory.")
     parser.add_argument("--model-name", type=str, default=None, help="name of the model.")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cpu",
+        help='torch.load map_location target. Examples: "cpu", "cuda", "cuda:0". Default: "cpu".',
+    )
     parser.add_argument("--float-point", action="store_true", help="use float-point 4-bit quantization.")
     parser.add_argument("--dry-run", type=bool, default=False, help="if True, state dicts will be NOT be saved")
     args = parser.parse_args()
@@ -33,7 +39,8 @@ if __name__ == "__main__":
     scale_dict_path = os.path.join(args.quant_path, "scale.pt")
     smooth_dict_path = os.path.join(args.quant_path, "smooth.pt")
     branch_dict_path = os.path.join(args.quant_path, "branch.pt")
-    map_location = "cuda:4" if torch.cuda.is_available() and torch.cuda.device_count() > 0 else "cpu"
+    # NOTE: checkpoints may have been saved on multi-GPU machines (e.g. cuda:4). Default to CPU to be portable.
+    map_location = args.device
     state_dict = torch.load(state_dict_path, map_location=map_location)
     scale_dict = torch.load(scale_dict_path, map_location="cpu")
     smooth_dict = torch.load(smooth_dict_path, map_location=map_location) if os.path.exists(smooth_dict_path) else {}
