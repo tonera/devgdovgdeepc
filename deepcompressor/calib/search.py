@@ -2,6 +2,7 @@
 """Search-based uantization calibrator module."""
 
 import gc
+import os
 import typing as tp
 from abc import ABC, abstractmethod
 from dataclasses import _MISSING_TYPE, MISSING
@@ -10,6 +11,7 @@ import psutil
 import torch
 import torch.nn as nn
 import torch.utils.hooks
+from tqdm import tqdm
 
 from ..data.cache import TensorCache, TensorsCache
 from ..data.common import TensorType
@@ -21,6 +23,27 @@ from ..utils.hooks import Hook
 from .config import SearchBasedCalibConfig, SearchBasedCalibGranularity, SearchBasedCalibObjective
 
 __all__ = ["SearchBasedCalibrator"]
+
+
+def _env_flag(*names: str) -> bool:
+    for name in names:
+        v = os.getenv(name)
+        if v is None:
+            continue
+        if str(v).strip().lower() in ("1", "true", "yes", "y", "on"):
+            return True
+    return False
+
+
+# When enabled, show extra (nested) tqdm progress bars for inner search/sampling loops.
+# Default is off to avoid noisy logs / tqdm overhead.
+_ENABLE_INNER_TQDM = _env_flag("DC_INNER_TQDM", "DEEPCOMPRESSOR_INNER_TQDM")
+
+
+def _maybe_tqdm(it, *, desc: str, total: int | None = None):
+    if not _ENABLE_INNER_TQDM:
+        return it
+    return tqdm(it, desc=desc, total=total, leave=False, dynamic_ncols=True)
 
 
 def _reshape_w_for_wgts(w: torch.Tensor, w_view_shape: torch.Size) -> torch.Tensor:
@@ -753,7 +776,8 @@ class SearchBasedCalibrator(ABC, tp.Generic[_CONFIG, _CANDIDATE]):
                 orig_ipts = ipts
             assert isinstance(orig_ipts, TensorsCache), "orig_ipts should not be None for OutputsError"
             orig_opts: dict[tuple[int, ...], torch.Tensor] = {}
-            for i in range(len(orig_ipts.front().data)):
+            n = len(orig_ipts.front().data)
+            for i in _maybe_tqdm(range(n), desc="calib.orig_outputs", total=n):
                 ipt = orig_ipts.extract(i, eval_kwargs)
                 y = eval_module(*ipt.args, **ipt.kwargs)
                 y = y[0] if not isinstance(y, torch.Tensor) else y
@@ -769,71 +793,82 @@ class SearchBasedCalibrator(ABC, tp.Generic[_CONFIG, _CANDIDATE]):
         torch.cuda.empty_cache()
         self.logger.debug(f"+ finished calculating the original outputs, ram usage: {psutil.virtual_memory().percent}")
         # endregion
-        while not self.is_done():
-            self.ask()
-            e: list[torch.Tensor] = []
-            # region Step 2: Calculate the errors
-            if self.objective == SearchBasedCalibObjective.TensorError:
-                assert isinstance(orig_wgts, (tuple, list))
-                for w, (_, orig_w), w_view_shape in zip(wgts, orig_wgts, w_view_shapes, strict=True):
-                    e_w = self._process_w_in_xw(w).sub_(orig_w)
-                    if self.granularity == SearchBasedCalibGranularity.Group:
-                        e_w = e_w.view(w_view_shape).abs_().pow_(self.config.degree)
-                        e_w = e_w.sum(dim=tuple(range(1, len(w_view_shape), 2))).view(w_view_shape[::2])
-                    elif self.granularity == SearchBasedCalibGranularity.ChannelGroup:
-                        e_w = e_w.view(*w_view_shape[:4], -1).abs_().pow_(self.config.degree)
-                        e_w = e_w.sum(dim=(0, 1, 3, 4)).view(w_view_shape[2])
-                    elif self.granularity == SearchBasedCalibGranularity.Layer:
-                        e_w = e_w.abs_().pow_(self.config.degree).sum().view(-1)
-                    else:
-                        raise ValueError(f"Unknown granularity {self.granularity}")
-                    e.append(e_w)
-            elif self.objective == SearchBasedCalibObjective.ProductsError:
-                e = [None] * len(wgts)
-                for j, w in enumerate(wgts):
-                    w = _reshape_w(self._process_w_in_xw(w), view_shape=w_view_shapes[j])
-                    for s, ipt in enumerate(ipts):
-                        for i, x in enumerate(ipt.data):
-                            x = x.to(device=w.device, non_blocking=True)
-                            if not self.needs_to_pre_reshape_x_for_wgts:
-                                x = self._process_x_in_xw(x, channels_dim=ipt.channels_dim)
-                                x = _reshape_x(x, view_shape=w_view_shapes[j], fn=ipt.reshape)
-                            y = torch.matmul(x, w)
-                            y = y.view(*y.shape[:-2], y.shape[-2] * y.shape[-1])
-                            y = y.sub_(orig_opts[(i, s, j)].to(device=w.device, non_blocking=True))
-                            if self.granularity == SearchBasedCalibGranularity.Group:
-                                y = y.to(self.develop_dtype).pow_(self.config.degree).sum(dim=-1)
-                            elif self.granularity == SearchBasedCalibGranularity.ChannelGroup:
-                                y = y.view(y.shape[0], y.shape[1], -1)
-                                y = y.to(self.develop_dtype).pow_(self.config.degree).sum(dim=(0, 2))
-                            elif self.granularity == SearchBasedCalibGranularity.Layer:
-                                y = y.to(self.develop_dtype).pow_(self.config.degree).sum().view(-1)
-                            else:
-                                raise ValueError(f"Unknown granularity {self.granularity}")
-                            if e[j] is None:
-                                e[j] = y
-                            else:
-                                e[j].add_(y)
-            elif self.objective == SearchBasedCalibObjective.OutputsError:
-                self._process_wgts_centric_mod(wgts=wgts, mods=mods, **kwargs)
-                e = [None]
-                for i in range(len(ipts.front().data)):
-                    ipt = ipts.extract(i, eval_kwargs)
-                    y = eval_module(*ipt.args, **ipt.kwargs)
-                    y = y[0] if not isinstance(y, torch.Tensor) else y
-                    assert isinstance(y, torch.Tensor), "eval_mod should return a tensor"
-                    y = (y - orig_opts[(i,)].to(device=y.device, non_blocking=True)).to(self.develop_dtype)
-                    y = y.pow_(self.config.degree).sum().view(-1)
-                    if e[0] is None:
-                        e[0] = y
-                    else:
-                        e[0].add_(y)
-                    del ipt, y
-                self._recover_mod()
-            else:
-                raise ValueError(f"Unknown objective {self.objective}")
-            # endregion
-            self.tell(e)
+        pbar_candidates = None
+        if _ENABLE_INNER_TQDM:
+            total_candidates = int(self.num_iters) * int(self.population_size)
+            pbar_candidates = tqdm(total=total_candidates, desc="calib.search", leave=False, dynamic_ncols=True)
+        try:
+            while not self.is_done():
+                self.ask()
+                e: list[torch.Tensor] = []
+                # region Step 2: Calculate the errors
+                if self.objective == SearchBasedCalibObjective.TensorError:
+                    assert isinstance(orig_wgts, (tuple, list))
+                    for w, (_, orig_w), w_view_shape in zip(wgts, orig_wgts, w_view_shapes, strict=True):
+                        e_w = self._process_w_in_xw(w).sub_(orig_w)
+                        if self.granularity == SearchBasedCalibGranularity.Group:
+                            e_w = e_w.view(w_view_shape).abs_().pow_(self.config.degree)
+                            e_w = e_w.sum(dim=tuple(range(1, len(w_view_shape), 2))).view(w_view_shape[::2])
+                        elif self.granularity == SearchBasedCalibGranularity.ChannelGroup:
+                            e_w = e_w.view(*w_view_shape[:4], -1).abs_().pow_(self.config.degree)
+                            e_w = e_w.sum(dim=(0, 1, 3, 4)).view(w_view_shape[2])
+                        elif self.granularity == SearchBasedCalibGranularity.Layer:
+                            e_w = e_w.abs_().pow_(self.config.degree).sum().view(-1)
+                        else:
+                            raise ValueError(f"Unknown granularity {self.granularity}")
+                        e.append(e_w)
+                elif self.objective == SearchBasedCalibObjective.ProductsError:
+                    e = [None] * len(wgts)
+                    for j, w in enumerate(wgts):
+                        w = _reshape_w(self._process_w_in_xw(w), view_shape=w_view_shapes[j])
+                        for s, ipt in enumerate(ipts):
+                            for i, x in enumerate(ipt.data):
+                                x = x.to(device=w.device, non_blocking=True)
+                                if not self.needs_to_pre_reshape_x_for_wgts:
+                                    x = self._process_x_in_xw(x, channels_dim=ipt.channels_dim)
+                                    x = _reshape_x(x, view_shape=w_view_shapes[j], fn=ipt.reshape)
+                                y = torch.matmul(x, w)
+                                y = y.view(*y.shape[:-2], y.shape[-2] * y.shape[-1])
+                                y = y.sub_(orig_opts[(i, s, j)].to(device=w.device, non_blocking=True))
+                                if self.granularity == SearchBasedCalibGranularity.Group:
+                                    y = y.to(self.develop_dtype).pow_(self.config.degree).sum(dim=-1)
+                                elif self.granularity == SearchBasedCalibGranularity.ChannelGroup:
+                                    y = y.view(y.shape[0], y.shape[1], -1)
+                                    y = y.to(self.develop_dtype).pow_(self.config.degree).sum(dim=(0, 2))
+                                elif self.granularity == SearchBasedCalibGranularity.Layer:
+                                    y = y.to(self.develop_dtype).pow_(self.config.degree).sum().view(-1)
+                                else:
+                                    raise ValueError(f"Unknown granularity {self.granularity}")
+                                if e[j] is None:
+                                    e[j] = y
+                                else:
+                                    e[j].add_(y)
+                elif self.objective == SearchBasedCalibObjective.OutputsError:
+                    self._process_wgts_centric_mod(wgts=wgts, mods=mods, **kwargs)
+                    e = [None]
+                    n = len(ipts.front().data)
+                    for i in _maybe_tqdm(range(n), desc="calib.eval_outputs", total=n):
+                        ipt = ipts.extract(i, eval_kwargs)
+                        y = eval_module(*ipt.args, **ipt.kwargs)
+                        y = y[0] if not isinstance(y, torch.Tensor) else y
+                        assert isinstance(y, torch.Tensor), "eval_mod should return a tensor"
+                        y = (y - orig_opts[(i,)].to(device=y.device, non_blocking=True)).to(self.develop_dtype)
+                        y = y.pow_(self.config.degree).sum().view(-1)
+                        if e[0] is None:
+                            e[0] = y
+                        else:
+                            e[0].add_(y)
+                        del ipt, y
+                    self._recover_mod()
+                else:
+                    raise ValueError(f"Unknown objective {self.objective}")
+                # endregion
+                self.tell(e)
+                if pbar_candidates is not None:
+                    pbar_candidates.update(1)
+        finally:
+            if pbar_candidates is not None:
+                pbar_candidates.close()
         return self.get_best()
 
     def _calibrate_ipts(  # noqa: C901

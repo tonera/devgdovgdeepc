@@ -13,14 +13,14 @@ eval:
     - "deepcompressor/dataset/MJHQ30KMETA.json"
   num_samples: 4
 quant:
-  enable_smooth: false
+  enable_smooth: true
   calib:
     batch_size: 1
     path: datasets/{dtype}/{model}/{protocol}/{data}/s8
     num_samples: 4
     num_workers: 1
   wgts:
-    enable_low_rank: false
+    enable_low_rank: true
     calib_range:
       element_batch_size: 4
       sample_batch_size: 4
@@ -29,7 +29,7 @@ quant:
     low_rank:
       sample_batch_size: 4
       sample_size: 4
-      num_iters: 15
+      num_iters: 10
       skips:
       - transformer_norm
       - transformer_add_norm
