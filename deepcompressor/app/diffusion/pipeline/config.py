@@ -363,9 +363,11 @@ class DiffusionPipelineConfig:
             else:
                 pipeline = SanaPipeline.from_pretrained(path, torch_dtype=dtype)
         elif name == "z-image-turbo":
+            print(f"Loading ZImagePipeline from {path}")
             pipeline = ZImagePipeline.from_pretrained(path, torch_dtype=dtype, low_cpu_mem_usage=False)
         else:
             pipeline = AutoPipelineForText2Image.from_pretrained(path, torch_dtype=dtype)
+        print(f"Pipeline loaded")
         pipeline = pipeline.to(device)
         model = pipeline.unet if hasattr(pipeline, "unet") else pipeline.transformer
         # replace_fused_linear_with_concat_linear(model)

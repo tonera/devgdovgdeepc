@@ -83,6 +83,7 @@ python3 -m deepcompressor.app.diffusion.dataset.collect.calib \
 
 **模型配置 (`z-image-turbo.yaml`)：**
 - `pipeline.name`: 模型名称
+- `pipeline.path`: 模型路径(diffusers目录)
 - `pipeline.dtype`: 模型数据类型 (torch.bfloat16)
 - `collect.root`: 校准数据输出路径
 
