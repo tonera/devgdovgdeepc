@@ -4,29 +4,29 @@ pipeline:
   path: /home/tonera/SVDQuant/Beyond_Reality_v1/diffusers
 collect:
   root: /home/tonera/project/devgdovgdeepc/datasets
-  num_samples: 8
+  num_samples: 4
 eval:
   num_steps: 4
   guidance_scale: 0
   protocol: fmeuler{num_steps}-g{guidance_scale}
   benchmarks:
     - "deepcompressor/dataset/MJHQ30KMETA.json"
-  num_samples: 8
+  num_samples: 4
 quant:
   calib:
     batch_size: 1
     path: datasets/{dtype}/{model}/{protocol}/{data}/s8
-    num_samples: 8
+    num_samples: 4
     num_workers: 1
   wgts:
     calib_range:
-      element_batch_size: 8
-      sample_batch_size: 8
-      element_size: 16
-      sample_size: 8
+      element_batch_size: 4
+      sample_batch_size: 4
+      element_size: 4
+      sample_size: 4
     low_rank:
-      sample_batch_size: 8
-      sample_size: 8
+      sample_batch_size: 4
+      sample_size: 4
       skips:
       - transformer_norm
       - transformer_add_norm
@@ -34,10 +34,10 @@ quant:
       - ffn_add
   ipts:
     calib_range:
-      element_batch_size: 8
-      sample_batch_size: 8
-      element_size: 16
-      sample_size: 8
+      element_batch_size: 4
+      sample_batch_size: 4
+      element_size: 4
+      sample_size: 4
     skips: 
     - transformer_norm
     - transformer_add_norm
@@ -45,21 +45,21 @@ quant:
     - ffn_add
   opts:
     calib_range:
-      element_batch_size: 8
-      sample_batch_size: 8
-      element_size: 16
-      sample_size: 8
+      element_batch_size: 4
+      sample_batch_size: 4
+      element_size: 4
+      sample_size: 4
   smooth:
     proj:
-      element_batch_size: -1
-      sample_batch_size: 8
-      element_size: -1
-      sample_size: 8
+      element_batch_size: 4
+      sample_batch_size: 4
+      element_size: 4
+      sample_size: 4
       skips:
       - transformer_norm
       - transformer_add_norm
       - attn_add
       - ffn_add
     attn:
-      sample_batch_size: 16
-      sample_size: -1
+      sample_batch_size: 4
+      sample_size: 4
