@@ -1,8 +1,9 @@
 pipeline:
   name: z-image-turbo
   dtype: torch.bfloat16
+  path: /home/tonera/models/Z-Image-Turbo
 collect:
-  root: /home/tonera/project/devgdovgdeepc/dc_calib/datasets/{dtype}/{model}/{protocol}/{data}/s8
+  root: /home/tonera/project/devgdovgdeepc
 eval:
   num_steps: 4
   guidance_scale: 0
