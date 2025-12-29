@@ -29,9 +29,11 @@ quant:
       sample_size: 4
       outputs_device: cuda
     low_rank:
-      sample_batch_size: 4
-      sample_size: 4
-      num_iters: 10
+      # speed knobs: low-rank calibration dominates runtime
+      sample_batch_size: 1
+      sample_size: 1
+      num_iters: 2
+      early_stop: true
       outputs_device: cuda
       skips:
       - transformer_norm
