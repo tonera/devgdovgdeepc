@@ -2,6 +2,7 @@ import gc
 import json
 import os
 import pprint
+import sys
 import traceback
 
 import torch
@@ -22,6 +23,57 @@ from .quant import (
 )
 
 __all__ = ["ptq"]
+
+
+def _infer_loaded_yaml_paths_from_cli(*, parser, argv: list[str] | None = None) -> list[str]:
+    """Infer YAML config files loaded by omniconfig (defaults + provided), in load order."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    # Use the underlying argparse parser to retrieve positional config arguments exactly as omniconfig sees them.
+    namespace, _ = parser._parser.parse_known_args(argv)  # type: ignore[attr-defined]
+    file_scope = getattr(namespace, parser.FILE_SCOPE, [])  # type: ignore[attr-defined]
+
+    import_paths: list[str] = []
+    config_paths: list[str] = []
+    for path in file_scope:
+        assert isinstance(path, str), f"{path} is not a string"
+        if path.endswith(parser.FILE_EXTS):  # type: ignore[attr-defined]
+            config_paths.append(path)
+        else:
+            import_paths.append(path)
+
+    imported_config_paths: list[str] = []
+    for import_path in import_paths:
+        assert os.path.isfile(import_path), f"{import_path} is not a file"
+        with open(import_path, "r") as f:
+            for path in f.readlines():
+                path = path.strip()
+                if not path:
+                    continue
+                assert os.path.isfile(path), f"{path} is not a file"
+                assert path.endswith(parser.FILE_EXTS), f"{path} is not a config file"  # type: ignore[attr-defined]
+                imported_config_paths.append(path)
+    config_paths = imported_config_paths + config_paths
+
+    default_paths: list[str] = []
+    for path in config_paths:
+        assert os.path.isfile(path), f"{path} is not a file"
+        assert path.endswith(parser.FILE_EXTS), f"{path} is not a config file"  # type: ignore[attr-defined]
+        # Keep behavior aligned with omniconfig: config must be under cwd and inside a subfolder.
+        rel_path = os.path.relpath(path, os.getcwd())
+        assert not rel_path.startswith(".."), f"{path} is not under {os.getcwd()}"
+        _paths = rel_path.split(os.sep)
+        assert len(_paths) > 1, f"{path} is not under a subfolder of {os.getcwd()}"
+        cfg_dir = ""
+        for dirname in _paths[:-1]:
+            cfg_dir = os.path.join(cfg_dir, dirname)
+            for ext in parser.FILE_EXTS:  # type: ignore[attr-defined]
+                default_path = os.path.join(cfg_dir, f"__default__.{ext}")
+                if os.path.isfile(default_path) and default_path not in default_paths:
+                    default_paths.append(default_path)
+                    break
+
+    loaded_paths = default_paths + config_paths
+    return [os.path.abspath(p) for p in loaded_paths]
 
 
 def ptq(  # noqa: C901
@@ -373,13 +425,24 @@ def main(config: DiffusionPtqRunConfig, logging_level: int = tools.logging.DEBUG
 
 
 if __name__ == "__main__":
-    config, _, unused_cfgs, unused_args, unknown_args = DiffusionPtqRunConfig.get_parser().parse_known_args()
+    parser = DiffusionPtqRunConfig.get_parser()
+    config, _, unused_cfgs, unused_args, unknown_args = parser.parse_known_args()
     assert isinstance(config, DiffusionPtqRunConfig)
     if len(unused_cfgs) > 0:
         tools.logging.warning(f"Unused configurations: {unused_cfgs}")
     if unused_args is not None:
         tools.logging.warning(f"Unused arguments: {unused_args}")
     assert len(unknown_args) == 0, f"Unknown arguments: {unknown_args}"
+    if getattr(config, "dump_config", False):
+        import yaml
+
+        loaded_paths = _infer_loaded_yaml_paths_from_cli(parser=parser)
+        print("=== Loaded YAML config files (load order) ===")
+        for p in loaded_paths:
+            print(p)
+        print("\n=== Merged YAML config ===")
+        print(yaml.safe_dump(config.dump(), sort_keys=False, allow_unicode=True))
+        sys.exit(0)
     try:
         main(config, logging_level=tools.logging.DEBUG)
     except Exception as e:

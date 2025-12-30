@@ -72,6 +72,16 @@ class DiffusionPtqRunConfig:
     load_from: str = ""
     save_model: str = ""
     copy_on_save: bool = False
+    dump_config: bool = field(
+        default=False,
+        metadata={
+            omniconfig.ARGPARSE_ARGS: ("--dump-config",),
+            omniconfig.ARGPARSE_KWARGS: {
+                "action": "store_true",
+                "help": "Dump loaded YAML config file paths and the merged config, then exit without running PTQ.",
+            },
+        },
+    )
 
     def __post_init__(self):
         # region set text encoder quanatization scale default dtype
