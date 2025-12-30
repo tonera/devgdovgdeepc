@@ -441,7 +441,12 @@ if __name__ == "__main__":
         for p in loaded_paths:
             print(p)
         print("\n=== Merged YAML config ===")
-        print(yaml.safe_dump(config.dump(), sort_keys=False, allow_unicode=True))
+        merged_yaml = yaml.safe_dump(config.dump(), sort_keys=False, allow_unicode=True)
+        print(merged_yaml)
+        official_yaml_path = "/tmp/official.yaml"
+        with open(official_yaml_path, "w", encoding="utf-8") as f:
+            f.write(merged_yaml)
+        print(f"\n=== Exported merged YAML to {official_yaml_path} ===")
         sys.exit(0)
     try:
         main(config, logging_level=tools.logging.DEBUG)
